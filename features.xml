@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  ~ Copyright 2016-present Open Networking Laboratory
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+<features xmlns="http://karaf.apache.org/xmlns/features/v1.2.0" name="${project.artifactId}-${project.version}">
+    <feature name="${project.artifactId}" version="${project.version}"
+             description="${project.description}">
+        <!--<featue version="1.7.0">onos-api</featue>-->
+        <bundle>mvn:${project.groupId}/onos-app-fmt/${project.version}</bundle>
+        <bundle>wrap:mvn:com.weka/weka/1.0</bundle>
+        <bundle>wrap:mvn:com.googlecode.matrix-toolkits-java/mtj/1.0.4</bundle>
+        <bundle>wrap:mvn:com.googlecode.netlib-java/netlib-java/1.1</bundle>
+        <bundle>wrap:mvn:net.sourceforge.f2j/arpack_combined_all/0.1</bundle>
+        <bundle>wrap:mvn:nz.ac.waikato.cms.weka.thirdparty/java-cup-11b/2015.03.26</bundle>
+        <bundle>wrap:mvn:nz.ac.waikato.cms.weka.thirdparty/java-cup-11b-runtime/2015.03.26</bundle>
+        <bundle>wrap:mvn:nz.ac.waikato.cms.weka.thirdparty/bounce/0.18</bundle>
+        <bundle>wrap:mvn:org.apache.commons/commons-compress/1.10</bundle>
+    </feature>
+</features>
