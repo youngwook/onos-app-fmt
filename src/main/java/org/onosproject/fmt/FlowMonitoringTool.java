@@ -89,7 +89,7 @@ public class FlowMonitoringTool implements FlowFeatures {
 
     private static final int CURRENTTIME = 2;
 
-    private static final int DEFAULT_TIMEOUT = 5;
+    private static final int DEFAULT_TIMEOUT = 8;
 
     private static final int DEFAULT_PRIORITY = 10;
 
@@ -103,12 +103,16 @@ public class FlowMonitoringTool implements FlowFeatures {
 
     private static Classifier VOTE;
 
+    private static Classifier MP;
+
     @Activate
     protected void activate(ComponentContext context) {
 
         appId = coreService.registerApplication("org.onosproject.fmt");
 
         RBF = classifier.getClassifier();
+
+        MP = classifier.getClassifier(1);
 
         VOTE = classifier.getClassifiers();
 
@@ -161,18 +165,57 @@ public class FlowMonitoringTool implements FlowFeatures {
         classifier.writeArffFiles(ins, name);
         return true;
     }
-    // block abnormal flows
-    public void block() {
-        Map<TrafficFeature, Double> values = classifyResults();
+
+    // About Firewall Rule Install
+
+    // block abnormal flows - 2017.6.14
+    public void block(int i) {
+        DeviceId deviceId = getDeviceId("of:0000000000000006");
+        Map<DeviceId, Set<TrafficFeature>> firewalls = getInstalledFirewall(deviceId);
+
+        Set<TrafficFeature> firewall = firewalls.get(deviceId);
+
+        Map<TrafficFeature, Double> values = classifyAndResults();
+
         for (TrafficFeature tf : values.keySet()) {
             if (values.get(tf) > 0) {
-                flowRuleInstall(tf.getFlowrule().deviceId(), tf);
-                log.info("install rule to " + tf.getFlowrule().deviceId());
+                if (eq(firewall, tf)) {
+                    flowRuleInstall(tf.getFlowrule().deviceId(), tf);
+                    log.info("install rule to " + tf.getFlowrule().deviceId());
+                }
+            }
+        }
+    }
+    public boolean eq (Set<TrafficFeature> firewall, TrafficFeature tf) {
+        boolean re = false;
+        for (TrafficFeature f : firewall) {
+            if (f.equals(tf)) {
+                re = true;
+            }
+        }
+        return re;
+    }
+
+    // block abnormal flows
+    public void block() {
+        DeviceId deviceId = getDeviceId("of:0000000000000006");
+        Map<DeviceId, Set<TrafficFeature>> firewalls = getInstalledFirewall(deviceId);
+
+        Set<TrafficFeature> firewall = firewalls.get(deviceId);
+
+        Map<TrafficFeature, Double> values = classifyResults(1);
+
+        for (TrafficFeature tf : values.keySet()) {
+            if (values.get(tf) > 0) {
+                if (eq(firewall, tf)) {
+                    flowRuleInstall(tf.getFlowrule().deviceId(), tf);
+                    log.info("install rule to " + tf.getFlowrule().deviceId());
+                }
             }
         }
     }
 
-    // block abnormal flows
+    // block abnormal flows by algorithms
     public void blocks() {
         Map<TrafficFeature, Double> values = classifyAndResults();
         for (TrafficFeature tf : values.keySet()) {
@@ -198,7 +241,31 @@ public class FlowMonitoringTool implements FlowFeatures {
         }
         return null;
     }
-    //classify and get results using single algotithm
+
+    // About Classify and Results
+
+    //classify and get results using single algorithm
+    public Map<TrafficFeature, Double> classifyResults(int iz) {
+        List<Map<TrafficFeature, List<String>>> traffics = getIns();
+        Map<TrafficFeature, Double> results = new LinkedHashMap<TrafficFeature, Double>();
+        for (Map<TrafficFeature, List<String>> list : traffics) {
+            Instances ins = classifier.getInstances(list);
+            Set<TrafficFeature> keySet = list.keySet();
+            int i = 0;
+            for (TrafficFeature feature : keySet) {
+                double value = classifier.classify(MP, ins.instance(i++));
+                if (results.containsKey(feature)) {
+                    results.put(feature, results.get(feature) + value);
+                } else {
+
+                    results.put(feature, value);
+                }
+            }
+        }
+        return results;
+    }
+
+    //classify and get results using single algorithm
     public Map<TrafficFeature, Double> classifyResults() {
         List<Map<TrafficFeature, List<String>>> traffics = getIns();
         Map<TrafficFeature, Double> results = new LinkedHashMap<TrafficFeature, Double>();
@@ -240,7 +307,9 @@ public class FlowMonitoringTool implements FlowFeatures {
         return results;
     }
 
-    // put instances home directory on named format
+    //About Export Received Data Set
+
+    // put instances which from devices, home directory on named format
     public synchronized void putTrafficfeatures(List<Map<TrafficFeature, List<String>>> features, String name) {
         File file = new File(FILE_PATH + name);
         FileWriter fw = checkFile(file);
@@ -308,6 +377,9 @@ public class FlowMonitoringTool implements FlowFeatures {
         }
         return fw;
     }
+
+    // About Flow Rule Generation and Install
+
     // install firewall rull to device
     public synchronized void flowRuleInstall(DeviceId dviceId, TrafficFeature rule) {
         TrafficSelector.Builder selectorBuilder = DefaultTrafficSelector.builder();
@@ -654,6 +726,7 @@ public class FlowMonitoringTool implements FlowFeatures {
         }
         return false;
     }
+
     //get same dst port traffic from Set TrafficFeatures
     public Map<TpPort, Set<TrafficFeature>> getSameServiceFeatrues(Set<TrafficFeature> trafficFeatures) {
         Map<TpPort, Set<TrafficFeature>> sameServiceFeatures = new HashMap<TpPort, Set<TrafficFeature>>();
@@ -667,6 +740,7 @@ public class FlowMonitoringTool implements FlowFeatures {
         }
         return sameServiceFeatures;
     }
+
     //find same port connections
     public boolean comparePort(Map<TpPort, Set<TrafficFeature>> sameServiceFeatures, TrafficFeature trafficFeature) {
         if (sameServiceFeatures.isEmpty()) {
@@ -680,6 +754,7 @@ public class FlowMonitoringTool implements FlowFeatures {
         }
         return false;
     }
+
     // get flows in full connections fraom TrafficFeatures
     public Set<TrafficFeature> getFlowFeatures(Map<DeviceId, Set<TrafficFeature>> trafficFeatures) {
 
@@ -696,6 +771,7 @@ public class FlowMonitoringTool implements FlowFeatures {
         return flowFtures;
 
     }
+
     // get flows in current connection from full connections
     public Set<TrafficFeature> getFlowFeatures(Set<TrafficFeature> trafficFeatures) {
 
@@ -708,6 +784,24 @@ public class FlowMonitoringTool implements FlowFeatures {
         return flowFtures;
 
     }
+
+    // Maping Device with Flow Entry
+
+    // Get Flow Entrys for installed firewall -2017.6.14
+    public Map<DeviceId, Set<TrafficFeature>> getInstalledFirewall(DeviceId id) {
+        Map<DeviceId, Set<FlowEntry>> flowentrys = getFirewalledFlowEntrys(id);
+        Map<DeviceId, Set<TrafficFeature>> trafficTeatures = new HashMap<DeviceId, Set<TrafficFeature>>();
+        Set<DeviceId> deviceIds = flowentrys.keySet();
+        for (DeviceId deviceId: deviceIds) {
+            Set<TrafficFeature> trafficFeature = new HashSet<TrafficFeature>();
+            for (FlowEntry flowEntry: flowentrys.get(deviceId)) {
+                trafficFeature.add(flowEntryToTrafficFeatue(flowEntry));
+            }
+            trafficTeatures.put(deviceId, trafficFeature);
+        }
+        return trafficTeatures;
+    }
+
     // get TrafficFeatures form received flowEntrys by a device
     public Map<DeviceId, Set<TrafficFeature>> getTrafficFeatures(DeviceId id) {
         Map<DeviceId, Set<FlowEntry>> flowentrys = getFlowEntrys(id);
@@ -722,6 +816,7 @@ public class FlowMonitoringTool implements FlowFeatures {
         }
         return trafficTeatures;
     }
+
     // get TrafficFeatures from received flowEntrys by each device
     public Map<DeviceId, Set<TrafficFeature>> getTrafficFeatures() {
         Map<DeviceId, Set<FlowEntry>> flowentrys = getFlowEntrys();
@@ -736,7 +831,10 @@ public class FlowMonitoringTool implements FlowFeatures {
         }
         return trafficTeatures;
     }
-    //convet flowEntry to TrafficFeatue class
+
+    //Modify  Flow Entry
+
+    //convert flowEntry to TrafficFeatue class
     public TrafficFeature flowEntryToTrafficFeatue(FlowEntry flowEntry) {
         TrafficFeature trafficFeature = new TrafficFeature();
         Set<Criterion> features = flowEntry.selector().criteria();
@@ -774,15 +872,42 @@ public class FlowMonitoringTool implements FlowFeatures {
         trafficFeature.setFlowrule(flowEntry);
         return trafficFeature;
     }
+
+    // About FlowEntry
+
+    //get Firewall flowEntrys from a device -2017.6.14
+    public Map<DeviceId, Set<FlowEntry>> getFirewalledFlowEntrys(DeviceId deviceId) {
+        Map<DeviceId, Set<FlowEntry>> flowentrys = new HashMap<DeviceId, Set<FlowEntry>>();
+        Set<FlowEntry> flowentry = new HashSet<FlowEntry>();
+        Iterable<FlowEntry> flows = flowRuleService.getFlowEntries(deviceId);
+        for (FlowEntry flow : flows) {
+            if ( appId.equals(flow.appId())) {
+                if (flow.state() == FlowEntry.FlowEntryState.ADDED
+                        || flow.state() == FlowEntry.FlowEntryState.PENDING_ADD ) {
+                    flowentry.add(flow);
+                }
+
+            }
+        }
+        if (!flowentry.isEmpty()) {
+            flowentrys.put(deviceId, flowentry);
+        }
+        return flowentrys;
+    }
+
     //get flowEntrys from a device
     public Map<DeviceId, Set<FlowEntry>> getFlowEntrys(DeviceId deviceId) {
         Map<DeviceId, Set<FlowEntry>> flowentrys = new HashMap<DeviceId, Set<FlowEntry>>();
         Set<FlowEntry> flowentry = new HashSet<FlowEntry>();
         Iterable<FlowEntry> flows = flowRuleService.getFlowEntries(deviceId);
         for (FlowEntry flow : flows) {
-            if (!flow.isPermanent() && flow.state() !=
-                    FlowEntry.FlowEntryState.REMOVED && !appId.equals(flow.appId())) {
-                flowentry.add(flow);
+            if (!flow.isPermanent()) {
+                if (!appId.equals(flow.appId())) {
+                    if (flow.state() == FlowEntry.FlowEntryState.ADDED
+                            || flow.state() == FlowEntry.FlowEntryState.PENDING_ADD ) {
+                        flowentry.add(flow);
+                    }
+                }
             }
         }
         if (!flowentry.isEmpty()) {
@@ -798,9 +923,13 @@ public class FlowMonitoringTool implements FlowFeatures {
             Set<FlowEntry> flowentry = new HashSet<FlowEntry>();
             Iterable<FlowEntry> flows = flowRuleService.getFlowEntries(deviceId);
             for (FlowEntry flow : flows) {
-                if (!flow.isPermanent() && flow.state() !=
-                        FlowEntry.FlowEntryState.REMOVED && !appId.equals(flow.appId())) {
-                    flowentry.add(flow);
+                if (!flow.isPermanent()) {
+                    if (!appId.equals(flow.appId())) {
+                        if (flow.state() == FlowEntry.FlowEntryState.ADDED
+                                || flow.state() == FlowEntry.FlowEntryState.PENDING_ADD ) {
+                            flowentry.add(flow);
+                        }
+                    }
                 }
             }
             if (!flowentry.isEmpty()) {
@@ -809,6 +938,9 @@ public class FlowMonitoringTool implements FlowFeatures {
         }
         return flowentrys;
     }
+
+    // About Device(Switch or Routers in Control) id
+
     // get deviceIds current exists device from topologyService
     public List<DeviceId> getDeviceId() {
         List<DeviceId> devices = new ArrayList<DeviceId>();

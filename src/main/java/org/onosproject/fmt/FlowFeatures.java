@@ -8,9 +8,7 @@ public interface FlowFeatures {
 
         RBF("RBFNetwork.model"),
         MLP("MultilayerPerceptron.model"),
-        SMO("SMO.model"),
-        J48("J48.model"),
-        NAB("NaiveBayes.model");
+        NAB("BayesNet.model");
 
         private String model;
 

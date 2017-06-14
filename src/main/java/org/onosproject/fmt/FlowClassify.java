@@ -103,6 +103,13 @@ public class FlowClassify implements FlowFeatures {
         return readModel(Model.RBF.getModel());
 
     }
+
+    public Classifier getClassifier(int i) {
+
+        return readModel(Model.MLP.getModel());
+
+    }
+
     public Instances getInstances(List<Map<TrafficFeature, List<String>>> flowfeatures) {
 
         Instances instances = createAttributes();

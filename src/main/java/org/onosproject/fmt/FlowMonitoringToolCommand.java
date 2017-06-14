@@ -88,7 +88,7 @@ public class FlowMonitoringToolCommand extends AbstractShellCommand {
     }
 
     public void executes(FlowMonitoringTool service) {
-        FlowMonitoringTool.Schedule job1 = service.buildSchedule(2);
+        FlowMonitoringTool.Schedule job1 = service.buildSchedule(1);
         FlowMonitoringTool.Schedule job2 = service.buildSchedule(option);
         schedule.scheduleAtFixedRate(job1, 0, DEFAULT_MONITORTIME, TimeUnit.SECONDS);
         schedule.scheduleAtFixedRate(job2, DEFAULT_FIWARETIME, DEFAULT_FIWARETIME, TimeUnit.SECONDS);
