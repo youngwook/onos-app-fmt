@@ -56,13 +56,7 @@ import weka.core.Instances;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Skeletal ONOS application component.
@@ -172,25 +166,43 @@ public class FlowMonitoringTool implements FlowFeatures {
     public void block(int i) {
         DeviceId deviceId = getDeviceId("of:0000000000000006");
         Map<DeviceId, Set<TrafficFeature>> firewalls = getInstalledFirewall(deviceId);
+        Set<TrafficFeature> installedRules = new HashSet<TrafficFeature>();
 
         Set<TrafficFeature> firewall = firewalls.get(deviceId);
 
         Map<TrafficFeature, Double> values = classifyAndResults();
-
+        log.info("");
         for (TrafficFeature tf : values.keySet()) {
             if (values.get(tf) > 0) {
-                if (eq(firewall, tf)) {
+                log.info("value of results " + values.get(tf));
+                if (firewall == null) {
                     flowRuleInstall(tf.getFlowrule().deviceId(), tf);
                     log.info("install rule to " + tf.getFlowrule().deviceId());
                 }
+                else if (!eq(firewall, tf)) {
+                    flowRuleInstall(tf.getFlowrule().deviceId(), tf);
+                    log.info("install rule to " + tf.getFlowrule().deviceId());
+                }
+
             }
         }
+        log.info("");
+//        for (TrafficFeature tf : firewall) {
+//            if (eq(installedRules, tf)) {
+//                flowRuleRemove(tf.getFlowrule().deviceId(), tf);
+//                log.info("remove rule from " + tf.getFlowrule().deviceId());
+//            }
+//        }
     }
     public boolean eq (Set<TrafficFeature> firewall, TrafficFeature tf) {
         boolean re = false;
         for (TrafficFeature f : firewall) {
-            if (f.equals(tf)) {
-                re = true;
+            if (f.getSrc().contains(tf.getSrc())) {
+                if (f.getDst().contains(tf.getDst())) {
+                    if (f.getProtocol().equals(tf.getProtocol())) {
+                        re = true;
+                    }
+                }
             }
         }
         return re;
@@ -200,19 +212,28 @@ public class FlowMonitoringTool implements FlowFeatures {
     public void block() {
         DeviceId deviceId = getDeviceId("of:0000000000000006");
         Map<DeviceId, Set<TrafficFeature>> firewalls = getInstalledFirewall(deviceId);
+        Set<TrafficFeature> installedRules = new HashSet<TrafficFeature>();
 
         Set<TrafficFeature> firewall = firewalls.get(deviceId);
 
-        Map<TrafficFeature, Double> values = classifyResults(1);
-
+        Map<TrafficFeature, Double> values = classifyResults();
+        log.info("");
         for (TrafficFeature tf : values.keySet()) {
             if (values.get(tf) > 0) {
-                if (eq(firewall, tf)) {
+                log.info("value of results " + values.get(tf));
+                if (firewall == null) {
                     flowRuleInstall(tf.getFlowrule().deviceId(), tf);
                     log.info("install rule to " + tf.getFlowrule().deviceId());
                 }
+                else if (!eq(firewall, tf)) {
+                    flowRuleInstall(tf.getFlowrule().deviceId(), tf);
+                    log.info("install rule to " + tf.getFlowrule().deviceId());
+                }
+
             }
         }
+        log.info("");
+
     }
 
     // block abnormal flows by algorithms
@@ -389,14 +410,14 @@ public class FlowMonitoringTool implements FlowFeatures {
         selectorBuilder.matchEthType(Ethernet.TYPE_IPV4);
         selectorBuilder.matchIPSrc(rule.getSrc());
         selectorBuilder.matchIPDst(rule.getDst());
-        byte proto = 0;
+        byte proto = 17;
         if (rule.getProtocol().equals("tcp")) {
             proto = IPv4.PROTOCOL_TCP;
-            selectorBuilder.matchTcpDst(rule.getPort());
+//            selectorBuilder.matchTcpDst(rule.getPort());
         }
         if (rule.getProtocol().equals("udp")) {
             proto = IPv4.PROTOCOL_UDP;
-            selectorBuilder.matchTcpDst(rule.getPort());
+//            selectorBuilder.matchUdpDst(rule.getPort());
         }
         if (rule.getProtocol().equals("icmp")) {
             proto = IPv4.PROTOCOL_ICMP;
@@ -412,6 +433,40 @@ public class FlowMonitoringTool implements FlowFeatures {
         flowEntry.fromApp(appId);
         flowEntry.makeTemporary(DEFAULT_TIMEOUT);
         flowRuleService.applyFlowRules(flowEntry.build());
+    }
+
+    // Remove timeout flow rules
+    public synchronized void flowRuleRemove(DeviceId dviceId, TrafficFeature rule) {
+        TrafficSelector.Builder selectorBuilder = DefaultTrafficSelector.builder();
+        TrafficTreatment.Builder treatment = DefaultTrafficTreatment.builder();
+        FlowEntry.Builder flowEntry = DefaultFlowEntry.builder();
+
+        selectorBuilder.matchEthType(Ethernet.TYPE_IPV4);
+        selectorBuilder.matchIPSrc(rule.getSrc());
+        selectorBuilder.matchIPDst(rule.getDst());
+        byte proto = 17;
+        if (rule.getProtocol().equals("tcp")) {
+            proto = IPv4.PROTOCOL_TCP;
+            selectorBuilder.matchTcpDst(rule.getPort());
+        }
+        if (rule.getProtocol().equals("udp")) {
+            proto = IPv4.PROTOCOL_UDP;
+            selectorBuilder.matchUdpDst(rule.getPort());
+        }
+        if (rule.getProtocol().equals("icmp")) {
+            proto = IPv4.PROTOCOL_ICMP;
+        }
+        selectorBuilder.matchIPProtocol(proto);
+
+        treatment.add(Instructions.createNoAction());
+
+        flowEntry.forDevice(dviceId);
+        flowEntry.withPriority(DEFAULT_PRIORITY);
+        flowEntry.withSelector(selectorBuilder.build());
+        flowEntry.withTreatment(treatment.build());
+        flowEntry.fromApp(appId);
+        flowEntry.makeTemporary(DEFAULT_TIMEOUT);
+        flowRuleService.removeFlowRules(flowEntry.build());
     }
 
     //get Instances form a devices
@@ -795,7 +850,7 @@ public class FlowMonitoringTool implements FlowFeatures {
         for (DeviceId deviceId: deviceIds) {
             Set<TrafficFeature> trafficFeature = new HashSet<TrafficFeature>();
             for (FlowEntry flowEntry: flowentrys.get(deviceId)) {
-                trafficFeature.add(flowEntryToTrafficFeatue(flowEntry));
+                trafficFeature.add(firewallEntryToTrafficFeatue(flowEntry));
             }
             trafficTeatures.put(deviceId, trafficFeature);
         }
@@ -873,6 +928,36 @@ public class FlowMonitoringTool implements FlowFeatures {
         return trafficFeature;
     }
 
+    //convert firewall to TrafficFeatue class
+    public TrafficFeature firewallEntryToTrafficFeatue(FlowEntry flowEntry) {
+        TrafficFeature trafficFeature = new TrafficFeature();
+        Set<Criterion> features = flowEntry.selector().criteria();
+        for (Criterion feature: features) {
+            if (feature.type() == Criterion.Type.IPV4_SRC) {
+                IPCriterion ip = (IPCriterion) feature;
+                trafficFeature.setSrc((Ip4Prefix) ip.ip());
+            }
+            if (feature.type() == Criterion.Type.IPV4_DST) {
+                IPCriterion ip = (IPCriterion) feature;
+                trafficFeature.setDst((Ip4Prefix) ip.ip());
+            }
+            if (feature.type() == Criterion.Type.IP_PROTO) {
+                IPProtocolCriterion ip = (IPProtocolCriterion) feature;
+                if (ip.protocol() == IPv4.PROTOCOL_TCP) {
+                    trafficFeature.setProtocol("tcp");
+                }
+                if (ip.protocol() == IPv4.PROTOCOL_UDP) {
+                    trafficFeature.setProtocol("udp");
+                }
+                if (ip.protocol() == IPv4.PROTOCOL_ICMP) {
+                    trafficFeature.setProtocol("icmp");
+                }
+            }
+        }
+        trafficFeature.setFlowrule(flowEntry);
+        return trafficFeature;
+    }
+
     // About FlowEntry
 
     //get Firewall flowEntrys from a device -2017.6.14
@@ -900,12 +985,15 @@ public class FlowMonitoringTool implements FlowFeatures {
         Map<DeviceId, Set<FlowEntry>> flowentrys = new HashMap<DeviceId, Set<FlowEntry>>();
         Set<FlowEntry> flowentry = new HashSet<FlowEntry>();
         Iterable<FlowEntry> flows = flowRuleService.getFlowEntries(deviceId);
+        log.info("");
+        log.info("start! get flows");
         for (FlowEntry flow : flows) {
             if (!flow.isPermanent()) {
-                if (!appId.equals(flow.appId())) {
+                if (!(appId.id() == flow.appId())) {
                     if (flow.state() == FlowEntry.FlowEntryState.ADDED
                             || flow.state() == FlowEntry.FlowEntryState.PENDING_ADD ) {
                         flowentry.add(flow);
+                        log.info("flows there");
                     }
                 }
             }
@@ -913,6 +1001,8 @@ public class FlowMonitoringTool implements FlowFeatures {
         if (!flowentry.isEmpty()) {
             flowentrys.put(deviceId, flowentry);
         }
+        log.info("ends!-------------------------------------------------");
+        log.info("");
         return flowentrys;
     }
     // get flowEntrys by each devices
@@ -924,7 +1014,7 @@ public class FlowMonitoringTool implements FlowFeatures {
             Iterable<FlowEntry> flows = flowRuleService.getFlowEntries(deviceId);
             for (FlowEntry flow : flows) {
                 if (!flow.isPermanent()) {
-                    if (!appId.equals(flow.appId())) {
+                    if (!(appId.id() == flow.appId())) {
                         if (flow.state() == FlowEntry.FlowEntryState.ADDED
                                 || flow.state() == FlowEntry.FlowEntryState.PENDING_ADD ) {
                             flowentry.add(flow);
@@ -1001,7 +1091,7 @@ public class FlowMonitoringTool implements FlowFeatures {
                     block();
                     break;
                 case 4:
-                    blocks();
+                    block(1);
                     break;
                 default:
                     break;
