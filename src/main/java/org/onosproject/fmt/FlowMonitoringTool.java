@@ -196,12 +196,20 @@ public class FlowMonitoringTool implements FlowFeatures {
     }
     public boolean eq (Set<TrafficFeature> firewall, TrafficFeature tf) {
         boolean re = false;
-        for (TrafficFeature f : firewall) {
-            if (f.getSrc().contains(tf.getSrc())) {
-                if (f.getDst().contains(tf.getDst())) {
-                    if (f.getProtocol().equals(tf.getProtocol())) {
-                        re = true;
+        if (tf.getProtocol().equals("icmp")) {
+            for (TrafficFeature f : firewall) {
+                if (f.getSrc().contains(tf.getSrc())) {
+                    if (f.getDst().contains(tf.getDst())) {
+                        if (f.getProtocol().equals(tf.getProtocol())) {
+                            re = true;
+                        }
                     }
+                }
+            }
+        } else {
+            for (TrafficFeature f : firewall) {
+                if (f.equals(tf)) {
+                    re = true;
                 }
             }
         }
@@ -413,11 +421,11 @@ public class FlowMonitoringTool implements FlowFeatures {
         byte proto = 17;
         if (rule.getProtocol().equals("tcp")) {
             proto = IPv4.PROTOCOL_TCP;
-//            selectorBuilder.matchTcpDst(rule.getPort());
+            selectorBuilder.matchTcpDst(rule.getPort());
         }
         if (rule.getProtocol().equals("udp")) {
             proto = IPv4.PROTOCOL_UDP;
-//            selectorBuilder.matchUdpDst(rule.getPort());
+            selectorBuilder.matchUdpDst(rule.getPort());
         }
         if (rule.getProtocol().equals("icmp")) {
             proto = IPv4.PROTOCOL_ICMP;
@@ -850,7 +858,7 @@ public class FlowMonitoringTool implements FlowFeatures {
         for (DeviceId deviceId: deviceIds) {
             Set<TrafficFeature> trafficFeature = new HashSet<TrafficFeature>();
             for (FlowEntry flowEntry: flowentrys.get(deviceId)) {
-                trafficFeature.add(firewallEntryToTrafficFeatue(flowEntry));
+                trafficFeature.add(flowEntryToTrafficFeatue(flowEntry));
             }
             trafficTeatures.put(deviceId, trafficFeature);
         }
